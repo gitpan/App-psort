@@ -1,0 +1,174 @@
+#!/usr/bin/perl -w
+# -*- perl -*-
+
+#
+# Author: Slaven Rezic
+#
+# Copyright (C) 2009,2011 Slaven Rezic. All rights reserved.
+# This program is free software; you can redistribute it and/or
+# modify it under the same terms as Perl itself.
+#
+# Mail: slaven@rezic.de
+# WWW:  http://www.rezic.de/eserte/
+#
+
+use strict;
+use Getopt::Long;
+
+use vars qw($VERSION);
+$VERSION = "0.01_50";
+
+my $sort_type = 'alpha';
+my $reverse;
+my $ignore_leading_blanks;
+my $ignore_case;
+my $ignore_nonprinting;
+my $perlscript;
+my @modules;
+my $cmp_perlscript;
+
+Getopt::Long::Configure("bundling");
+GetOptions(
+	   "n|numeric-sort"       => sub { $sort_type = 'numeric' },
+	   "N|natural-sort"       => sub { $sort_type = 'sort_naturally' },
+	   "V|version-sort"       => sub { $sort_type = 'version' },
+	   "C|compare-function=s" => \$cmp_perlscript,
+	   "b|ignore-leading-blanks" => \$ignore_leading_blanks,
+	   "f|ignore-case"        => \$ignore_case,
+	   "i|ignore-nonprinting" => \$ignore_nonprinting,
+	   "r|reverse"            => \$reverse,
+	   "e|field-function=s"   => \$perlscript,
+	   'M|module=s@'          => \@modules,
+	   "v|version"            => sub {
+	       print "psort version $VERSION\n";
+	       exit 0;
+	   },
+	  ) or die <<EOF;
+usage: $0 [-n | -N | -V | -C ...] [-r] -e ...
+
+-n: compare numerically
+-N: compare using Sort::Naturally
+-V: compare versions
+-C: compare using any perl code (\$a and \$b are defined)
+-r: reverse sorting
+-e: perl oneliner, should return the value to be compared as last value
+-M: add perl modules
+EOF
+
+if ($cmp_perlscript) {
+    $sort_type = eval "sub { $cmp_perlscript }";
+    die "Cannot compile 'cmp' code: $@" if $@;
+}
+
+for my $module_spec (@modules) {
+    my($module,$imports) = split /=/, $module_spec, 2;
+    eval qq{require $module};
+    die $@ if $@;
+    my @imports;
+    if (defined $imports) {
+	@imports = split /,/, $imports;
+	$module->import(@imports);
+    }
+}
+
+my @data;
+my $cb = defined $perlscript ? do {
+    my $sub = eval "sub { $perlscript }";
+    die "Cannot compile code: $@" if $@;
+    $sub;
+} : sub { $_ };
+
+if (@ARGV) {
+    for my $file (@ARGV) {
+	add_psort(do { open my $fh, $file or die "Can't open $file: $!"; $fh });
+    }
+} else {
+    add_psort(\*STDIN);
+}
+
+if ($sort_type eq 'numeric') {
+    no warnings 'numeric', 'uninitialized';
+    if ($reverse) {
+	@data = sort { $b->[1] <=> $a->[1] } @data;
+    } else {
+	@data = sort { $a->[1] <=> $b->[1] } @data;
+    }
+} elsif ($sort_type eq 'alpha') {
+    no warnings 'uninitialized';
+    if ($reverse) {
+	@data = sort { $b->[1] cmp $a->[1] } @data;
+    } else {
+	@data = sort { $a->[1] cmp $b->[1] } @data;
+    }
+} elsif ($sort_type eq 'sort_naturally') {
+    require Sort::Naturally;
+    no warnings 'uninitialized';
+    if ($reverse) {
+	@data = sort { Sort::Naturally::ncmp($b->[1], $a->[1]) } @data;
+    } else {
+	@data = sort { Sort::Naturally::ncmp($a->[1], $b->[1]) } @data;
+    }
+} elsif ($sort_type eq 'version') {
+    require CPAN::Version;
+    no warnings 'uninitialized';
+    if ($reverse) {
+	@data = sort { CPAN::Version->vcmp($b->[1], $a->[1]) } @data;
+    } else {
+	@data = sort { CPAN::Version->vcmp($a->[1], $b->[1]) } @data;
+    }
+} elsif (UNIVERSAL::isa($sort_type, 'CODE')) {
+    no warnings 'uninitialized';
+    if ($reverse) {
+	@data = sort { local($a, $b) = ($b->[1], $a->[1]); $sort_type->() } @data;
+    } else {
+	@data = sort { local($a, $b) = ($a->[1], $b->[1]); $sort_type->() } @data;
+    }
+} else {
+    die "Unhandled sort type '$sort_type'";
+}
+
+for (@data) {
+    print $_->[0];
+}
+
+sub add_psort {
+    my($fh) = @_;
+    while(<$fh>) {
+	my $line = $_;
+	my $res = $cb->($_); # force scalar context
+	$res = lc $res            if $ignore_case;
+	$res =~ s{^\s+}{}         if $ignore_leading_blanks;
+	$res =~ s{[[:^print]]}{}g if $ignore_nonprinting;
+	push @data, [$line, $res];
+    }
+}
+
+__END__
+
+=head1 NAME
+
+psort - a perl-enhanced sort
+
+=head1 SYNOPSIS
+
+    psort [-n | -N | -V | -C '$a cmp $b'] [-r] -e '/...(...).../ && $1'
+
+=head1 AUTHOR
+
+Slaven ReziE<x0107>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2009,2011 by Slaven ReziE<x0107>
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
+
+=head1 SEE ALSO
+
+L<sort(1)>, L<Sort::Naturally>.
+
+=cut
+
+
