@@ -21,4 +21,4 @@ requires:
   Sort::Naturally: 0
 resources:
   repository: git://github.com/eserte/app-psort.git
-version: 0.01_51
+version: 0.01_52
