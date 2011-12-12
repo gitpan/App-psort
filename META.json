@@ -32,6 +32,7 @@
       },
       "runtime" : {
          "requires" : {
+            "CPAN::Version" : 0,
             "Sort::Naturally" : 0
          }
       }
@@ -42,5 +43,5 @@
          "url" : "git://github.com/eserte/app-psort.git"
       }
    },
-   "version" : "0.01_52"
+   "version" : "0.01_53"
 }
