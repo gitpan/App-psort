@@ -16,10 +16,11 @@ use strict;
 use Getopt::Long;
 
 use vars qw($VERSION);
-$VERSION = "0.01_54";
+$VERSION = "0.01_55";
 
 my $sort_type = 'alpha';
 my $reverse;
+my $check;
 my $ignore_leading_blanks;
 my $ignore_case;
 my $ignore_nonprinting;
@@ -37,6 +38,7 @@ GetOptions(
 	   "f|ignore-case"        => \$ignore_case,
 	   "i|ignore-nonprinting" => \$ignore_nonprinting,
 	   "r|reverse"            => \$reverse,
+	   "c|check"              => \$check,
 	   "e|field-function=s"   => \$perlscript,
 	   'M|module=s@'          => \@modules,
 	   "v|version"            => sub {
@@ -86,49 +88,58 @@ if (@ARGV) {
     add_psort(\*STDIN);
 }
 
+my $sort_preamble = q{no warnings 'uninitialized';};
+my $sort_creator;
 if ($sort_type eq 'numeric') {
-    no warnings 'numeric', 'uninitialized';
-    if ($reverse) {
-	@data = sort { $b->[1] <=> $a->[1] } @data;
-    } else {
-	@data = sort { $a->[1] <=> $b->[1] } @data;
-    }
+    $sort_preamble = q{no warnings 'numeric', 'uninitialized';};
+    $sort_creator = sub { $_[0] . ' <=> ' . $_[1] };
 } elsif ($sort_type eq 'alpha') {
-    no warnings 'uninitialized';
-    if ($reverse) {
-	@data = sort { $b->[1] cmp $a->[1] } @data;
-    } else {
-	@data = sort { $a->[1] cmp $b->[1] } @data;
-    }
+    $sort_creator = sub { $_[0] . ' cmp ' . $_[1] };
 } elsif ($sort_type eq 'sort_naturally') {
     require Sort::Naturally;
-    no warnings 'uninitialized';
-    if ($reverse) {
-	@data = sort { Sort::Naturally::ncmp($b->[1], $a->[1]) } @data;
-    } else {
-	@data = sort { Sort::Naturally::ncmp($a->[1], $b->[1]) } @data;
-    }
+    $sort_creator = sub { 'Sort::Naturally::ncmp(' . $_[0] . ', ' . $_[1] . ')' };
 } elsif ($sort_type eq 'version') {
     require CPAN::Version;
-    no warnings 'uninitialized';
-    if ($reverse) {
-	@data = sort { CPAN::Version->vcmp($b->[1], $a->[1]) } @data;
-    } else {
-	@data = sort { CPAN::Version->vcmp($a->[1], $b->[1]) } @data;
-    }
+    $sort_creator = sub { 'CPAN::Version->vcmp(' . $_[0] . ', ' . $_[1] . ')' };
 } elsif (UNIVERSAL::isa($sort_type, 'CODE')) {
-    no warnings 'uninitialized';
-    if ($reverse) {
-	@data = sort { local($a, $b) = ($b->[1], $a->[1]); $sort_type->() } @data;
-    } else {
-	@data = sort { local($a, $b) = ($a->[1], $b->[1]); $sort_type->() } @data;
-    }
+    $sort_creator = sub { 'local($a, $b) = (' . $_[0] . ', ' . $_[1] . '); $sort_type->()' };
 } else {
     die "Unhandled sort type '$sort_type'";
 }
 
-for (@data) {
-    print $_->[0];
+if ($check) {
+    exit 0 if !@data;
+    my $code = $sort_preamble;
+    $code .= 'sub { ';
+    if ($reverse) {
+	$code .= $sort_creator->('$_[1]->[1]', '$_[0]->[1]');
+    } else {
+	$code .= $sort_creator->('$_[0]->[1]', '$_[1]->[1]');
+    }
+    $code .= '}';
+    my $check_sub = eval $code;
+    die "Error while evaluating '$code': $@" if $@;
+    for(my $i=1; $i<=$#data; $i++) {
+	if ($check_sub->($data[$i-1], $data[$i]) > 0) {
+	    exit 1;
+	}
+    }
+    exit 0;
+} else {
+    my $code = $sort_preamble;
+    $code .= '@data = sort { ';
+    if ($reverse) {
+	$code .= $sort_creator->('$b->[1]', '$a->[1]');
+    } else {
+	$code .= $sort_creator->('$a->[1]', '$b->[1]');
+    }
+    $code .= ' } @data';
+    eval $code;
+    die "Error while evaluating '$code': $@" if $@;
+
+    for (@data) {
+	print $_->[0];
+    }
 }
 
 sub add_psort {
