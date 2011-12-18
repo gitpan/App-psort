@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               App-psort
-version:            0.01_55
+version:            0.01_56
 abstract:           ~
 author:
     - Slaven Rezic <srezic@cpan.org>

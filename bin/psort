@@ -16,7 +16,7 @@ use strict;
 use Getopt::Long;
 
 use vars qw($VERSION);
-$VERSION = "0.01_55";
+$VERSION = "0.01_56";
 
 my $sort_type = 'alpha';
 my $reverse;
@@ -147,7 +147,7 @@ sub add_psort {
     while(<$fh>) {
 	my $line = $_;
 	my $res = $cb->($_); # force scalar context
-	$res = lc $res            if $ignore_case;
+	$res = uc $res            if $ignore_case;
 	$res =~ s{^\s+}{}         if $ignore_leading_blanks;
 	$res =~ s{[[:^print]]}{}g if $ignore_nonprinting;
 	push @data, [$line, $res];
