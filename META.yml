@@ -1,7 +1,7 @@
 --- #YAML:1.0
 name:               App-psort
-version:            0.01_56
-abstract:           ~
+version:            0.01_57
+abstract:           a perl-enhanced sort
 author:
     - Slaven Rezic <srezic@cpan.org>
 license:            perl
