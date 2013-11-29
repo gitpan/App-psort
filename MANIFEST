@@ -5,4 +5,6 @@ MANIFEST
 MANIFEST.SKIP
 t/psort.t
 t/version_check.t
+Changes
+README
 META.yml                                 Module meta-data (added by MakeMaker)
